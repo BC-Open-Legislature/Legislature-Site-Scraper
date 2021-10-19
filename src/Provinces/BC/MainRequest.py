@@ -261,7 +261,7 @@ class MainRequest():
                         "recent_debates": []
                     }
                 )
-            except:
+            except Exception:
                 pass
 
         # ~ Close the driver to avoid wasted memory
