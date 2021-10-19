@@ -165,6 +165,8 @@ class MainRequest():
 
         drive = webdriver.Chrome(options=options)
 
+        cluster = MongoClient(secrets)
+
         # -=- Member Data -=-
 
         # ~ Get the main legislative page
