@@ -47,7 +47,6 @@ $ python3 -m pip install -r requirements.txt
 ###### Setup a mongo database
 * Setup a remote mongo database on https://cloud.mongodb.com 
 * You can also run it on your local machine https://docs.mongodb.com/manual/installation/`
-* 
 
 ###### Get the mongodb credentials
 ###### - Remote Database
