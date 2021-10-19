@@ -15,7 +15,6 @@ class MainRequest():
         options.add_argument('--disable-dev-shm-usage')
 
         drive = webdriver.Chrome(options=options)
-        drive.implicitly_wait(10)
 
         cluster = MongoClient(secrets)
 
@@ -158,15 +157,13 @@ class MainRequest():
 
     def get_member_data(secrets):
         # -=- Intialization -=-
-        cluster = MongoClient(secrets)
-
-        options = Options()
+        options = webdriver.ChromeOptions()
+        options.add_argument('--no-sandbox')
         options.add_argument('--headless')
         options.add_argument('--disable-gpu')
-        drive = webdriver.Remote(
-            'http://selenium:4444/wd/hub',
-            options=options,
-        )
+        options.add_argument('--disable-dev-shm-usage')
+
+        drive = webdriver.Chrome(options=options)
 
         # -=- Member Data -=-
 
