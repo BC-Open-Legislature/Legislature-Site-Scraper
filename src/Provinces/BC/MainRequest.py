@@ -151,7 +151,7 @@ class MainRequest():
                                 {"_id": key},
                                 {"$push": {"recent_debates": element}}
                             )
-                except:
+                except Exception:
                     pass
         drive.close()
         print("Finished Gathering Daily Data \n")
