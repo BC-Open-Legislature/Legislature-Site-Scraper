@@ -1,5 +1,4 @@
 import json
-import time
 
 # -=- BC Data Collector -=-
 from Provinces.BC.MainRequest import MainRequest as BC
