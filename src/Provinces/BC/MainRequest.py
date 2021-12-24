@@ -76,8 +76,6 @@ class MainRequest():
             # ~ Get the date so that it can be properly archived
             day = link_to_check[0].split('/')[-1].split('am')[0].split('pm')[0]
 
-            debates_for_today = [{"type": "current_speaker", "short_name": cluster["BC_Legislative_Archive"]["Legislative_Data"].find_one(
-                {"_id": "current_speaker"})["value"]}]  # = Stores an array of all the debate data
             # = Stores a dictionary with an array of elements for the recent debates of any member
             recent_data = {}
             index = 1        # = Used to allow the client to find an index
@@ -99,16 +97,14 @@ class MainRequest():
                             "time": entry.get_attribute('data-timeofday')[8:]
                         })
 
-                        # ~ Check if the name is special or a normal member
-                        if entry.find_element_by_class_name('attribution').text.replace(":", "") == "Mr. Speaker":
-                            name = debates_for_today[0]["short_name"]
-                        else:
-                            name = entry.find_element_by_class_name(
-                                'attribution').text.replace(":", "")
+                        name = entry.find_element_by_class_name(
+                            'attribution').text.replace(":", "")
 
                         if name not in recent_data:
                             recent_data[name] = []
-                        recent_data[name].append(f"{day}:{index}")
+                        recent_data[name].append(
+                            f"{day}:{index}"
+                        )
                         index += 1
                     # ~ If the speaker continues talking
                     elif "speaker-continues" in entry.get_attribute('class'):
@@ -116,6 +112,7 @@ class MainRequest():
                             "text": entry.text.replace('\n', ' '),
                             "type": "speaker_continues"
                         })
+                        index += 1
                     # If they change procedures / proceedings / subject
                     elif "proceeding-heading" in entry.get_attribute('class') or "procedure-heading" in entry.get_attribute('class') or "subject-heading" in entry.get_attribute('class'):
                         debates_for_today.append({
@@ -214,29 +211,19 @@ class MainRequest():
                     "location": member_data[1],
                     "elected": member_data[2],
                     "party": member_data[3],
-                    "speaker": False
                 }
-                if member_data["titles"] == "Speaker of the Legislative Assembly":
-                    member_data["speaker"] = True
-                    cluster["BC_Legislative_Archive"]["Legislative_Data"].update_one(
-                        {"_id": "current_speaker"},
-                        {"$set": {"value": str(abreviated_name)}},
-                        upsert=True
-                    )
-                    # ~ If they dont format it so
             else:
                 member_data = {
                     "titles": "",
                     "location": member_data[0],
                     "elected": member_data[1],
                     "party": member_data[2],
-                    "speaker": False
                 }
             # ~ Add the data to the array of formatted data
             formatted_mlas.append({
                 "_id": str(abreviated_name),
                 "abreviated_name": str(abreviated_name),
-                "name": drive.find_element_by_xpath("/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/h2").text.replace("Hon. ", "").replace("MLA: ", "").replace(", Q.C.", "") + (" (Mr. Speaker)" * int(member_data["speaker"])),
+                "name": drive.find_element_by_xpath("/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/h2").text.replace("Hon. ", "").replace("MLA: ", "").replace(", Q.C.", ""),
                 "image": drive.find_element_by_xpath("/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/div[2]/div[1]/div/img").get_attribute('src'),
                 "about": drive.find_element_by_xpath("/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/div[3]/div").text,
                 "member_data": member_data,
