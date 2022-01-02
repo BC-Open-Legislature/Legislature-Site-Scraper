@@ -1,6 +1,6 @@
-import time
 from pymongo import MongoClient
 from selenium import webdriver
+from selenium.webdriver.common.by import By
 
 
 def check_for_bc_election(secrets: str) -> bool:
@@ -20,17 +20,13 @@ def check_for_bc_election(secrets: str) -> bool:
 
     while True:
         # ~ Check if it's the most recent election
-        if 'Next' not in drive.find_element_by_xpath('/html/body/div[3]/div[3]/div[5]/div[1]/table[1]/tbody/tr[2]/td/table/tbody/tr/td[3]/a').text:
-            drive.find_element_by_xpath(
-                '/html/body/div[3]/div[3]/div[5]/div[1]/table[1]/tbody/tr[2]/td/table/tbody/tr/td[3]/a'
-            ).click()
+        if 'Next' not in drive.find_element(By.XPATH, '/html/body/div[3]/div[3]/div[5]/div[1]/table[1]/tbody/tr[2]/td/table/tbody/tr/td[3]/a').text:
+            drive.find_element(By.XPATH, '/html/body/div[3]/div[3]/div[5]/div[1]/table[1]/tbody/tr[2]/td/table/tbody/tr/td[3]/a').click()
         else:
             # ~ Check if it's a current election
-            if 'On' not in drive.find_element_by_xpath('/html/body/div[3]/div[3]/div[5]/div[1]/table[1]/tbody/tr[2]/td/table/tbody/tr/td[2]').text:
+            if 'On' not in drive.find_element(By.XPATH, '/html/body/div[3]/div[3]/div[5]/div[1]/table[1]/tbody/tr[2]/td/table/tbody/tr/td[2]').text:
                 cluster = MongoClient(secrets)
-                election = drive.find_element_by_class_name(
-                    "infobox-title"
-                ).text
+                election = drive.find_element(By.CLASS_NAME, "infobox-title").text
                 current_election = cluster["BC_Legislative_Archive"]["Legislative_Data"].find_one(
                     {
                         "_id": "current_election"
