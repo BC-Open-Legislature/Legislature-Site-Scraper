@@ -1,6 +1,8 @@
 import time
 from pymongo import MongoClient
 from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import StaleElementReferenceException
 
 
 class MainRequest():
@@ -23,12 +25,16 @@ class MainRequest():
         time.sleep(5)
 
         # ~ Click on the debates portion of the page
-        elements = drive.find_element_by_id('scriptWPQ3').find_elements_by_xpath('./*')
-        (element.click() for element in elements if element.text.lower() == 'debates (hansard)')
+        for element in drive.find_element(By.CLASS_NAME, 'BCLASS-bulleted-list').find_element(By.XPATH, './*'):
+            try:
+                if 'Debates' in element.text:
+                    element.find_element(By.TAG_NAME, 'a').click()
+                    break
+            except StaleElementReferenceException:
+                pass
         time.sleep(5)
 
-        outer_path_for_debates = drive.find_element_by_xpath(
-            '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[3]/div[1]/div/div/div/div/div[2]/ul')
+        outer_path_for_debates = drive.find_element(By.CLASS_NAME, 'BCLASS-Hansard-List')
         # = Used for making sure all the debates being read from are on the same day
         day = ''
         links_to_check = []      # = Used for looping over every debate that happend on that day
@@ -37,20 +43,18 @@ class MainRequest():
         offset = 0
 
         # ~ Loop over all the recent debates and find the most recent finalized transcript
-        for i in range(len(outer_path_for_debates.find_elements_by_xpath('./*'))):
+        for i in range(len(outer_path_for_debates.find_elements(By.XPATH, './*'))):
             i = i-offset
             # ~ Get the title of the debate (ex. Tuesday, June 8, 2021, Morning — Committee C	Blues)
             # = Title of the debate used for finding out if it's still a draft
-            current_debate_text = outer_path_for_debates.find_elements_by_xpath(
-                './*')[i].text.lower()
-            if current_debate_text != '' and current_debate_text.__contains__('blues') == False and current_debate_text.__contains__('live') == False and current_debate_text.__contains__('page') == False:
+            current_debate_text = outer_path_for_debates.find_elements(By.XPATH, './*')[i].text.lower()
+            if current_debate_text != '' and 'blues' not in current_debate_text and 'live' not in current_debate_text and 'page' not in current_debate_text:
 
                 # ~ Check if it's the same day still
                 if current_debate_text.split(',')[0] == day or day == '':
                     # ~ Set the day to check on the be this items day
                     day = current_debate_text.split(',')[0]
-                    temp_links_to_check.append(outer_path_for_debates.find_elements_by_xpath(
-                        './*')[i].find_element_by_class_name('BCLASS-Hansard-HTMLLink').find_element_by_xpath('./*').get_attribute('href'))
+                    temp_links_to_check.append(outer_path_for_debates.find_elements(By.XPATH,'./*')[i].find_element(By.CLASS_NAME, 'BCLASS-Hansard-HTMLLink').find_element(By.XPATH, './*').get_attribute('href'))
 
                 # ~ If it's not and we have 3 days worth of data leave the loop
                 elif len(links_to_check) >= 3:
@@ -76,15 +80,15 @@ class MainRequest():
                 drive.get(link)
                 time.sleep(10)
 
-                proceedingHeading, procedureHeading, subjectHeading = '';
-                drive.switch_to.frame(drive.find_elements_by_tag_name('iframe')[0])
+                proceedingHeading, procedureHeading, subjectHeading = ['', '', ''];
+                drive.switch_to.frame(drive.find_elements(By.TAG_NAME, 'iframe')[0])
                 
-                for entry in drive.find_element_by_xpath('/html/body/div/div[3]').find_elements_by_xpath('.//*'):
+                for entry in drive.find_element(By.XPATH, '/html/body/div/div[3]').find_elements(By.XPATH, './/*'):
                     # ~ If the speaker begins talking
                     if 'speaker-begins' in entry.get_attribute('class'):
                         debates_for_today.append({
-                            'short_name': entry.find_element_by_class_name('attribution').text.replace(':', ''),
-                            'text': entry.text.replace(entry.find_element_by_class_name('attribution').text, ''),
+                            'short_name': entry.find_element(By.CLASS_NAME, 'attribution').text.replace(':', ''),
+                            'text': entry.text.replace(entry.find_element(By.CLASS_NAME, 'attribution').text, ''),
                             'type': 'member_speech',
                             'time': entry.get_attribute('data-timeofday')[8:],
                             'proceedingHeading': proceedingHeading,
@@ -140,9 +144,8 @@ class MainRequest():
 
         # ~ Get all the links for every mla
         mla_list = []  # = Stores a array of all links
-        for mla in drive.find_element_by_xpath('/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[3]/div/div/ul').find_elements_by_xpath('./*'):
-            mla_list.append(mla.find_elements_by_xpath(
-                './*')[0].get_attribute('href'))
+        for mla in drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[3]/div/div/ul').find_elements(By.XPATH, './*'):
+            mla_list.append(mla.find_elements(By.XPATH,'./*')[0].get_attribute('href'))
 
         formatted_mlas = []  # = Stores the formatted data for all the mlas
         for mla in mla_list:
@@ -150,10 +153,10 @@ class MainRequest():
             drive.get(mla)
             time.sleep(1)
 
-            if 'Hon. ' in drive.find_element_by_xpath('/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/h2').text:
-                text = drive.find_element_by_xpath('/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/h2').text.split('MLA: ')[1].split('Hon. ')[1].replace(', Q.C.', '').split(' ')
+            if 'Hon. ' in drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/h2').text:
+                text = drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/h2').text.split('MLA: ')[1].split('Hon. ')[1].replace(', Q.C.', '').split(' ')
             else:
-                text = drive.find_element_by_xpath('/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/h2').text.split('MLA: ')[1].replace(', Q.C.', '').split(' ')
+                text = drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/h2').text.split('MLA: ')[1].replace(', Q.C.', '').split(' ')
 
             abreviated_name = text[0][0] + '. '
 
@@ -162,8 +165,7 @@ class MainRequest():
                 abreviated_name += tailing_name.replace(', Q.C.', '') + ' '
             abreviated_name = abreviated_name.strip()
 
-            member_data = drive.find_element_by_xpath(
-                '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/div[2]/div[2]/div[1]/div').text.split('\n')
+            member_data = drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/div[2]/div[2]/div[1]/div').text.split('\n')
             # ~ If the member has titles format it so
             if len(member_data) > 3:
                 member_data = {
@@ -183,9 +185,9 @@ class MainRequest():
             formatted_mlas.append({
                 '_id': str(abreviated_name),
                 'abreviated_name': str(abreviated_name),
-                'name': drive.find_element_by_xpath('/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/h2').text.replace('Hon. ', '').replace('MLA: ', '').replace(', Q.C.', ''),
-                'image': drive.find_element_by_xpath('/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/div[2]/div[1]/div/img').get_attribute('src'),
-                'about': drive.find_element_by_xpath('/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/div[3]/div').text,
+                'name': drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/h2').text.replace('Hon. ', '').replace('MLA: ', '').replace(', Q.C.', ''),
+                'image': drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/div[2]/div[1]/div/img').get_attribute('src'),
+                'about': drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/div[3]/div').text,
                 'member_data': member_data,
                 'active': True
             })
