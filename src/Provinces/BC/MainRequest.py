@@ -25,7 +25,7 @@ class MainRequest():
         time.sleep(5)
 
         # ~ Click on the debates portion of the page
-        for element in drive.find_element(By.CLASS_NAME, 'BCLASS-bulleted-list').find_element(By.XPATH, './*'):
+        for element in drive.find_element(By.CLASS_NAME, 'BCLASS-bulleted-list').find_elements(By.XPATH, './*'):
             try:
                 if 'Debates' in element.text:
                     element.find_element(By.TAG_NAME, 'a').click()
