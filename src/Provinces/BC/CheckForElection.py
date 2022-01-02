@@ -26,19 +26,19 @@ def check_for_bc_election(secrets: str) -> bool:
             # ~ Check if it's a current election
             if 'On' not in drive.find_element(By.XPATH, '/html/body/div[3]/div[3]/div[5]/div[1]/table[1]/tbody/tr[2]/td/table/tbody/tr/td[2]').text:
                 cluster = MongoClient(secrets)
-                election = drive.find_element(By.CLASS_NAME, "infobox-title").text
-                current_election = cluster["BC_Legislative_Archive"]["Legislative_Data"].find_one(
+                election = drive.find_element(By.CLASS_NAME, 'infobox-title').text
+                current_election = cluster['BC_Legislative_Archive']['Legislative_Data'].find_one(
                     {
-                        "_id": "current_election"
+                        '_id': 'current_election'
                     }
                 )
-                current_election = '' if current_election == None else current_election["value"]
+                current_election = '' if current_election == None else current_election['value']
 
                 if election == current_election:
                     return False
                 else:
-                    cluster["BC_Legislative_Archive"]["Legislative_Data"].update_one(
-                        {"_id": 'current_election'},
-                        {"$push": {"value": election}}
+                    cluster['BC_Legislative_Archive']['Legislative_Data'].update_one(
+                        {'_id': 'current_election'},
+                        {'$push': {'value': election}}
                     )
                     return True
