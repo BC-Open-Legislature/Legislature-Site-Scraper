@@ -108,7 +108,7 @@ class BC():
                 for entry in self.drive.find_element(By.CLASS_NAME, 'transcript').find_elements(By.XPATH, './/*'):
                     # ~ If the speaker begins talking
                     if 'speaker-begins' in entry.get_attribute('class'):
-                        name = entry.find_element(By.CLASS_NAME, 'attribution').text.replace(':', '').replace('Hon. ', '')
+                        name = entry.find_element(By.CLASS_NAME, 'attribution').text.replace(':', '').replace('Hon. ', '').replace(', Q.C. ', '')
                         speaker = self.cluster['BC_Legislative_Archive']['Members'].find_one({'_id': name})
                         if speaker == None:
                             speaker = {}
