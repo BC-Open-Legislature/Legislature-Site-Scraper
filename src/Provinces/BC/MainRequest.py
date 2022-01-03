@@ -2,61 +2,82 @@ import time
 from pymongo import MongoClient
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import StaleElementReferenceException
 
 
-class MainRequest():
-    def get_daily_data(secrets):
-        # -=- Intialization -=-
+class BC():
+    def __init__(self, secrets: str) -> None:
         options = webdriver.ChromeOptions()
         options.add_argument('--no-sandbox')
         options.add_argument('--headless')
         options.add_argument('--disable-gpu')
-        options.add_argument('--disable-dev-shm-usage')
 
-        drive = webdriver.Chrome(options=options)
+        self.drive = webdriver.Chrome(options=options)
+        self.drive.implicitly_wait(5)
 
-        cluster = MongoClient(secrets)
+        self.cluster = MongoClient(secrets)
 
-        # -=- Debates -=-
+    def clean_up(self) -> None:
+        self.drive.close()
 
-        # ~ Get the main legislative page
-        drive.get('https://www.leg.bc.ca/')
-        time.sleep(5)
+    def check_for_bc_election(self) -> bool:
+        '''Check for whether or not a BC election has happend using wikipedia'''
+
+        # -=- Get The Wikipedia Page For The BC Election -=-
+        self.drive.get('https://en.wikipedia.org/wiki/2020_British_Columbia_general_election')
+
+        while True:
+            # ~ Check if it's the most recent election
+            if 'Next' not in self.drive.find_element(By.XPATH, '/html/body/div[3]/div[3]/div[5]/div[1]/table[1]/tbody/tr[2]/td/table/tbody/tr/td[3]/a').text:
+                self.drive.find_element(By.XPATH, '/html/body/div[3]/div[3]/div[5]/div[1]/table[1]/tbody/tr[2]/td/table/tbody/tr/td[3]/a').click()
+            else:
+                # ~ Check if it's a current election
+                if 'On' not in self.drive.find_element(By.XPATH, '/html/body/div[3]/div[3]/div[5]/div[1]/table[1]/tbody/tr[2]/td/table/tbody/tr/td[2]').text:
+                    election = self.drive.find_element(By.CLASS_NAME, 'infobox-title').text
+                    current_election = self.cluster['BC_Legislative_Archive']['Legislative_Data'].find_one(
+                        {
+                            '_id': 'current_election'
+                        }
+                    )
+                    current_election = '' if current_election == None else current_election['value']
+
+                    if election == current_election:
+                        return False
+                    else:
+                        self.cluster['BC_Legislative_Archive']['Legislative_Data'].replace_one(
+                            {'_id': 'current_election'},
+                            {'_id': 'current_election', 'value': election},
+                            upsert=True
+                        )
+                        return True
+
+
+    def get_daily_data(self):
+        self.drive.get('https://www.leg.bc.ca/')
 
         # ~ Click on the debates portion of the page
-        for element in drive.find_element(By.CLASS_NAME, 'BCLASS-bulleted-list').find_elements(By.XPATH, './*'):
-            try:
-                if 'Debates' in element.text:
-                    element.find_element(By.TAG_NAME, 'a').click()
-                    break
-            except StaleElementReferenceException:
-                pass
-        time.sleep(5)
+        for element in self.drive.find_element(By.CLASS_NAME, 'BCLASS-bulleted-list').find_elements(By.XPATH, './*'):
+            if 'Debates' in element.text:
+                element.find_element(By.TAG_NAME, 'a').click()
+                break
 
-        outer_path_for_debates = drive.find_element(By.CLASS_NAME, 'BCLASS-Hansard-List')
-        # = Used for making sure all the debates being read from are on the same day
+        outer_path_for_debates = self.drive.find_element(By.CLASS_NAME, 'BCLASS-Hansard-List')
         day = ''
-        links_to_check = []      # = Used for looping over every debate that happend on that day
-        # = Used to store a temporary array of the debate links in a day to be added to links_to_check
+        links_to_check = []
         temp_links_to_check = []
         offset = 0
 
-        # ~ Loop over all the recent debates and find the most recent finalized transcript
+        # EROXL:TODO: Switch this to just checking if we don't have that debate and exiting if we have it
         for i in range(len(outer_path_for_debates.find_elements(By.XPATH, './*'))):
             i = i-offset
+            
             # ~ Get the title of the debate (ex. Tuesday, June 8, 2021, Morning — Committee C	Blues)
-            # = Title of the debate used for finding out if it's still a draft
             current_debate_text = outer_path_for_debates.find_elements(By.XPATH, './*')[i].text.lower()
             if current_debate_text != '' and 'blues' not in current_debate_text and 'live' not in current_debate_text and 'page' not in current_debate_text:
 
-                # ~ Check if it's the same day still
                 if current_debate_text.split(',')[0] == day or day == '':
-                    # ~ Set the day to check on the be this items day
                     day = current_debate_text.split(',')[0]
                     temp_links_to_check.append(outer_path_for_debates.find_elements(By.XPATH,'./*')[i].find_element(By.CLASS_NAME, 'BCLASS-Hansard-HTMLLink').find_element(By.XPATH, './*').get_attribute('href'))
 
-                # ~ If it's not and we have 3 days worth of data leave the loop
                 elif len(links_to_check) >= 3:
                     break
                 else:
@@ -77,36 +98,47 @@ class MainRequest():
 
             # ~ Loop over every link
             for link in link_to_check:
-                drive.get(link)
-                time.sleep(10)
+                self.drive.get(link)
 
-                proceedingHeading, procedureHeading, subjectHeading = ['', '', ''];
-                drive.switch_to.frame(drive.find_elements(By.TAG_NAME, 'iframe')[0])
+                proceedingHeading = '' 
+                procedureHeading = '' 
+                subjectHeading = ''
+                self.drive.switch_to.frame(self.drive.find_element(By.ID, 'BCLASS-Hansard-ContentFrame-v2'))
                 
-                for entry in drive.find_element(By.XPATH, '/html/body/div/div[3]').find_elements(By.XPATH, './/*'):
+                for entry in self.drive.find_element(By.CLASS_NAME, 'transcript').find_elements(By.XPATH, './/*'):
                     # ~ If the speaker begins talking
                     if 'speaker-begins' in entry.get_attribute('class'):
+                        name = entry.find_element(By.CLASS_NAME, 'attribution').text.replace(':', '').replace('Hon. ', '')
+                        speaker = self.cluster['BC_Legislative_Archive']['Members'].find_one({'_id': name})
+                        if speaker == None:
+                            speaker = {}
+                        
                         debates_for_today.append({
-                            'short_name': entry.find_element(By.CLASS_NAME, 'attribution').text.replace(':', ''),
+                            'short_name': name,
+                            'name': speaker.get('name', name),
+                            'image': speaker.get('image', ''),
+                            'party': speaker.get('member_data', {}).get('party', 'None'),
+                            'location': speaker.get('member_data', {}).get('location', 'Unknown'),
+
                             'text': entry.text.replace(entry.find_element(By.CLASS_NAME, 'attribution').text, ''),
-                            'type': 'member_speech',
-                            'time': entry.get_attribute('data-timeofday')[8:],
                             'proceedingHeading': proceedingHeading,
                             'procedureHeading': procedureHeading,
                             'subjectHeading': subjectHeading,
+
+                            'time': entry.get_attribute('data-timeofday')[8:],
                         })
                     
                     # ~ If the speaker continues talking
                     elif 'speaker-continues' in entry.get_attribute('class'):
-                        debates_for_today[-1]['text'] += entry.text;
+                        debates_for_today[-1]['text'] += f' {entry.text}';
                     
                     # ~ If they change procedures / proceedings / subject
                     elif 'proceeding-heading' in entry.get_attribute('class'):
-                        proceedingHeading = entry.text
+                        proceedingHeading = entry.text.replace('\n', ' ')
                     elif 'procedure-heading' in entry.get_attribute('class'):
-                        procedureHeading = entry.text
+                        procedureHeading = entry.text.replace('\n', ' ')
                     elif 'subject-heading' in entry.get_attribute('class'):
-                        subjectHeading = entry.text
+                        subjectHeading = entry.text.replace('\n', ' ')
 
             # ~ Format all the data so that it can be easily accessed from a database query
             debates_for_today = {
@@ -116,47 +148,32 @@ class MainRequest():
             }
 
             # ~ Insert the data into the Mongo database (overwrites the data if its already in there)
-            cluster['BC_Legislative_Archive']['Debates'].replace_one(
+            self.cluster['BC_Legislative_Archive']['Debates'].replace_one(
                 {'_id': day},       # = Filter
                 debates_for_today,  # = New Data
                 upsert=True         # = Upsert
             )
 
-        drive.close()
-
-    def get_member_data(secrets):
-        # -=- Intialization -=-
-        options = webdriver.ChromeOptions()
-        options.add_argument('--no-sandbox')
-        options.add_argument('--headless')
-        options.add_argument('--disable-gpu')
-        options.add_argument('--disable-dev-shm-usage')
-
-        drive = webdriver.Chrome(options=options)
-
-        cluster = MongoClient(secrets)
-
+    def get_member_data(self):
         # -=- Member Data -=-
 
         # ~ Get the main legislative page
-        drive.get('https://www.leg.bc.ca/learn-about-us/members')
-        time.sleep(5)
+        self.drive.get('https://www.leg.bc.ca/learn-about-us/members')
 
         # ~ Get all the links for every mla
         mla_list = []  # = Stores a array of all links
-        for mla in drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[3]/div/div/ul').find_elements(By.XPATH, './*'):
+        for mla in self.drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[3]/div/div/ul').find_elements(By.XPATH, './*'):
             mla_list.append(mla.find_elements(By.XPATH,'./*')[0].get_attribute('href'))
 
         formatted_mlas = []  # = Stores the formatted data for all the mlas
         for mla in mla_list:
             # ~ Go to the mla's page
-            drive.get(mla)
-            time.sleep(1)
+            self.drive.get(mla)
 
-            if 'Hon. ' in drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/h2').text:
-                text = drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/h2').text.split('MLA: ')[1].split('Hon. ')[1].replace(', Q.C.', '').split(' ')
+            if 'Hon. ' in self.drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/h2').text:
+                text = self.drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/h2').text.split('MLA: ')[1].split('Hon. ')[1].replace(', Q.C.', '').split(' ')
             else:
-                text = drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/h2').text.split('MLA: ')[1].replace(', Q.C.', '').split(' ')
+                text = self.drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/h2').text.split('MLA: ')[1].replace(', Q.C.', '').split(' ')
 
             abreviated_name = text[0][0] + '. '
 
@@ -165,7 +182,7 @@ class MainRequest():
                 abreviated_name += tailing_name.replace(', Q.C.', '') + ' '
             abreviated_name = abreviated_name.strip()
 
-            member_data = drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/div[2]/div[2]/div[1]/div').text.split('\n')
+            member_data = self.drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/div[2]/div[2]/div[1]/div').text.split('\n')
             # ~ If the member has titles format it so
             if len(member_data) > 3:
                 member_data = {
@@ -185,16 +202,20 @@ class MainRequest():
             formatted_mlas.append({
                 '_id': str(abreviated_name),
                 'abreviated_name': str(abreviated_name),
-                'name': drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/h2').text.replace('Hon. ', '').replace('MLA: ', '').replace(', Q.C.', ''),
-                'image': drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/div[2]/div[1]/div/img').get_attribute('src'),
-                'about': drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/div[3]/div').text,
+                'name': self.drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/h2').text.replace('Hon. ', '').replace('MLA: ', '').replace(', Q.C.', ''),
+                'image': self.drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/div[2]/div[1]/div/img').get_attribute('src'),
+                'about': self.drive.find_element(By.XPATH, '/html/body/form/div[7]/div/div[2]/div/div[3]/span/div[1]/div[1]/div[3]/div').text,
                 'member_data': member_data,
                 'active': True
             })
 
-        cluster['BC_Legislative_Archive']['Members'].update_many(
+        self.cluster['BC_Legislative_Archive']['Members'].update_many(
             {}, {'$set': {'active': False}}
         )
 
-        # ~ Close the driver
-        drive.close()
+        for mla in formatted_mlas:
+            self.cluster["BC_Legislative_Archive"]["Members"].replace_one(
+                {"_id": mla["_id"]},
+                mla,
+                True
+            )
