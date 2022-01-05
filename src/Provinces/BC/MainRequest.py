@@ -54,7 +54,6 @@ class BC():
 
     def get_daily_data(self):
         latest_date = self.cluster['BC_Legislative_Archive']['Debates'].find().limit(1).sort('_id', direction=pymongo.DESCENDING)[0]['date']
-        print(latest_date)
 
         self.drive.get('https://www.leg.bc.ca/')
 
@@ -68,28 +67,22 @@ class BC():
         day = ''
         links_to_check = []
         temp_links_to_check = []
-        offset = 0
 
         # EROXL:TODO: Switch this to just checking if we don't have that debate and exiting if we have it
         for i in range(len(outer_path_for_debates.find_elements(By.XPATH, './*'))):
-            i = i-offset
-            
             # ~ Get the title of the debate (ex. Tuesday, June 8, 2021, Morning — Committee C	Blues)
             current_debate_text = outer_path_for_debates.find_elements(By.XPATH, './*')[i].text.lower()
             if current_debate_text != '' and 'blues' not in current_debate_text and 'live' not in current_debate_text and 'page' not in current_debate_text:
-
                 if current_debate_text.split(',')[0] == day or day == '':
                     day = current_debate_text.split(',')[0]
                     temp_links_to_check.append(outer_path_for_debates.find_elements(By.XPATH,'./*')[i].find_element(By.CLASS_NAME, 'BCLASS-Hansard-HTMLLink').find_element(By.XPATH, './*').get_attribute('href'))
-
-                elif len(links_to_check) >= 3:
-                    break
+                    if temp_links_to_check[0].split('/')[-1].split('am')[0].split('pm')[0] == latest_date:
+                        break
                 else:
                     day = ''
                     temp_links_to_check.reverse()
                     links_to_check.append(temp_links_to_check)
                     temp_links_to_check = []
-                    offset += 1
 
         links_to_check.reverse()
 
