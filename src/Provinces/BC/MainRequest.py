@@ -84,7 +84,7 @@ class BC():
 
         links_to_check.reverse()
 
-        for link_to_check in links_to_check:
+        for link_to_check in links_to_check[:-1]:
             # ~ Get the date so that it can be properly archived
             day = link_to_check[0].split('/')[-1].split('am')[0].split('pm')[0]
 
