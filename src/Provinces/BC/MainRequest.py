@@ -1,5 +1,6 @@
 import time
 from pymongo import MongoClient
+import pymongo
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 
@@ -52,6 +53,9 @@ class BC():
 
 
     def get_daily_data(self):
+        latest_date = self.cluster['BC_Legislative_Archive']['Debates'].find().limit(1).sort('_id', direction=pymongo.DESCENDING)[0]['date']
+        print(latest_date)
+
         self.drive.get('https://www.leg.bc.ca/')
 
         # ~ Click on the debates portion of the page
