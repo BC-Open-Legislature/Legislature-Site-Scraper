@@ -1,6 +1,6 @@
 import time
-from pymongo import MongoClient
 import pymongo
+from pymongo import MongoClient
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 
